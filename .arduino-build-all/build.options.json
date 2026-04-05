@@ -1,9 +1,0 @@
-{
-  "additionalFiles": "",
-  "compiler.optimization_flags": "-Os",
-  "customBuildProperties": "",
-  "fqbn": "esp32:esp32:esp32",
-  "hardwareFolders": "/Users/cypher/Library/Arduino15/packages/esp32/hardware/esp32/3.3.6,/Users/cypher/Library/Arduino15/packages/esp32/hardware/esp32/3.3.6",
-  "otherLibrariesFolders": "/Users/cypher/Documents/Arduino/libraries",
-  "sketchLocation": "/Users/cypher/Documents/GitHub/esp32-iphone-shortcuts/esp32_gpio_api_all"
-}

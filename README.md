@@ -19,6 +19,10 @@ Each sketch connects an ESP32 board to your local Wi-Fi network and starts a web
 From your iPhone, iPad, Mac, browser, or any device on the same LAN, you can call routes like:
 
 - `GET /health`
+- `GET /system`
+- `GET /wifi/status`
+- `GET /wifi/scan`
+- `GET /ble/scan`
 - `GET /gpio/<pin>/on`
 - `GET /gpio/<pin>/off`
 - `GET /gpio/<pin>/status`
@@ -61,10 +65,13 @@ This repository contains several standalone Arduino sketches, each targeting a s
 | `esp32_gpio_api_s3/` | ESP32-S3 single-pin | Single-pin variant for ESP32-S3 boards |
 | `esp32_gpio_api_s3_all/` | ESP32-S3 multi-pin | Multi-pin ESP32-S3 variant with `/pins` |
 | `esp32_c3_supermini_gpio_api_all/` | ESP32-C3 Super Mini multi-pin | Multi-pin variant for common C3 Super Mini boards |
+| `esp32_gpio_api_universal/` | Official universal sketch | Auto-detects ESP32 family and exposes the same Shortcut API |
 
 ## Feature Highlights
 
 - Local HTTP API for GPIO control
+- Discovery endpoints for Wi-Fi, BLE, and system diagnostics
+- Official universal sketch for auto-detected board families
 - JSON responses that are easy to consume in Apple Shortcuts
 - `GET /health` endpoint for quick connectivity checks
 - Optional mDNS hostname support via `http://esp32-gpio.local`
@@ -141,15 +148,18 @@ Choose the folder that matches your board and use case:
 
 - use a `single-pin` sketch if you only need one GPIO endpoint
 - use an `all` sketch if you want multiple safe pins and `/pins`
+- use `esp32_gpio_api_universal/` if you want one official sketch that auto-detects the board family
 
 ### 4. Set Wi-Fi Credentials
 
-At the top of the sketch, update:
+Copy [secrets.example.h](/Users/cypher/Documents/GitHub/esp32-iphone-shortcuts/secrets.example.h) to `secrets.h` at the repo root, then update:
 
 ```cpp
 const char* ssid = "YOUR_WIFI_NAME";
 const char* password = "YOUR_WIFI_PASSWORD";
 ```
+
+The sketches include `../secrets.h`, and `.gitignore` keeps the local file out of git.
 
 ### 5. Select The Board
 
@@ -158,6 +168,8 @@ Typical board selections:
 - `ESP32 Dev Module` for standard ESP32 boards
 - `ESP32S3 Dev Module` for ESP32-S3 boards
 - the closest compatible ESP32-C3 option for your C3 Super Mini
+
+Set the partition scheme to `Huge APP (3MB No OTA/1MB SPIFFS)` for every sketch in this repo. The discovery features, including BLE scanning, push these builds beyond the default 1.2MB app partition.
 
 ### 6. Upload The Sketch
 
@@ -262,6 +274,13 @@ All sketches include:
 - `GET /`
 - `GET /health`
 
+The main `esp32_gpio_api_all/` sketch also includes:
+
+- `GET /system`
+- `GET /wifi/status`
+- `GET /wifi/scan`
+- `GET /ble/scan`
+
 Pin routes:
 
 - `GET /gpio/<pin>/on`
@@ -285,6 +304,10 @@ GET /gpio/23/status
 ESP32 multi-pin sketch:
 
 ```text
+GET /system
+GET /wifi/status
+GET /wifi/scan
+GET /ble/scan
 GET /gpio/18/on
 GET /gpio/23/off
 GET /gpio/33/status
@@ -356,6 +379,64 @@ Invalid pin:
 }
 ```
 
+`/wifi/status` response:
+
+```json
+{
+  "success": true,
+  "connected": true,
+  "ssid": "thanos lives forever",
+  "ip": "10.0.0.176",
+  "hostname": "esp32-gpio",
+  "mac": "C0:5D:89:DE:14:58",
+  "rssi": -20,
+  "channel": 11
+}
+```
+
+`/wifi/scan` response:
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "ip": "10.0.0.176",
+  "networks": [
+    { "ssid": "thanos lives forever", "rssi": -26, "channel": 11, "encryption": "wpa2_psk", "open": false },
+    { "ssid": "Neighbor WiFi", "rssi": -78, "channel": 6, "encryption": "wpa2_wpa3_psk", "open": false }
+  ]
+}
+```
+
+`/system` response:
+
+```json
+{
+  "success": true,
+  "ip": "10.0.0.176",
+  "hostname": "esp32-gpio",
+  "uptime_ms": 11365,
+  "free_heap": 180968,
+  "min_free_heap": 177516,
+  "chip_model": "ESP32-D0WD-V3",
+  "chip_revision": 301,
+  "cpu_mhz": 240,
+  "flash_size": 4194304,
+  "sdk_version": "v5.5.2-249-gf56bea3d1f"
+}
+```
+
+`/ble/scan` unsupported response:
+
+```json
+{
+  "success": false,
+  "supported": false,
+  "message": "BLE scanning is not available in this build.",
+  "ip": "10.0.0.176"
+}
+```
+
 ## Safe Pin Notes
 
 The multi-pin sketches intentionally expose only conservative allowlists.
@@ -395,10 +476,12 @@ Arduino IDE is the default workflow, but `arduino-cli` is useful for quick compi
 Examples:
 
 ```sh
-arduino-cli compile --fqbn esp32:esp32:esp32 esp32_gpio_api
-arduino-cli compile --fqbn esp32:esp32:esp32 esp32_gpio_api_all
-arduino-cli compile --fqbn esp32:esp32:esp32s3 esp32_gpio_api_s3
-arduino-cli compile --fqbn esp32:esp32:esp32s3 esp32_gpio_api_s3_all
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=huge_app esp32_gpio_api
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=huge_app esp32_gpio_api_all
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=huge_app esp32_gpio_api_universal
+arduino-cli compile --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app esp32_gpio_api_s3
+arduino-cli compile --fqbn esp32:esp32:esp32s3:PartitionScheme=huge_app esp32_gpio_api_s3_all
+arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app esp32_c3_supermini_gpio_api_all
 ```
 
 For the ESP32-C3 Super Mini variant, use the matching ESP32-C3 FQBN available in your local board package.
@@ -421,6 +504,9 @@ Here are a few simple demos that fit this repo well:
 - `Relay Switch`: trigger a relay from your iPhone
 - `Desk Mode`: create two shortcuts, one for `on` and one for `off`
 - `GPIO Dashboard`: use `/pins` with Shortcuts to display current pin states
+- `Wi-Fi Scanner`: call `/wifi/scan` and show nearby SSIDs in Shortcuts
+- `Signal Check`: call `/wifi/status` before running a GPIO shortcut
+- `ESP32 Health Card`: call `/system` to show uptime, heap, and chip details
 - `Voice Trigger`: run the shortcut through Siri
 
 ## Security And Sharing Notes

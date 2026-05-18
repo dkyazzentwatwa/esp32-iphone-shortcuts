@@ -75,6 +75,7 @@ This repository contains several standalone Arduino sketches, each targeting a s
 - JSON responses that are easy to consume in Apple Shortcuts
 - `GET /health` endpoint for quick connectivity checks
 - Optional mDNS hostname support via `http://esp32-gpio.local`
+- Lightweight Wi-Fi reconnect handling after temporary network drops
 - Safe output pin allowlists for multi-pin builds
 - Beginner-friendly structure with very little abstraction
 
@@ -273,13 +274,14 @@ All sketches include:
 
 - `GET /`
 - `GET /health`
-
-The main `esp32_gpio_api_all/` sketch also includes:
-
 - `GET /system`
 - `GET /wifi/status`
 - `GET /wifi/scan`
 - `GET /ble/scan`
+
+The universal sketch also includes:
+
+- `GET /info`
 
 Pin routes:
 
@@ -385,7 +387,7 @@ Invalid pin:
 {
   "success": true,
   "connected": true,
-  "ssid": "thanos lives forever",
+  "ssid": "YOUR_WIFI_NAME",
   "ip": "10.0.0.176",
   "hostname": "esp32-gpio",
   "mac": "C0:5D:89:DE:14:58",
@@ -402,7 +404,7 @@ Invalid pin:
   "count": 2,
   "ip": "10.0.0.176",
   "networks": [
-    { "ssid": "thanos lives forever", "rssi": -26, "channel": 11, "encryption": "wpa2_psk", "open": false },
+    { "ssid": "YOUR_WIFI_NAME", "rssi": -26, "channel": 11, "encryption": "wpa2_psk", "open": false },
     { "ssid": "Neighbor WiFi", "rssi": -78, "channel": 6, "encryption": "wpa2_wpa3_psk", "open": false }
   ]
 }
@@ -486,6 +488,8 @@ arduino-cli compile --fqbn esp32:esp32:esp32c3:PartitionScheme=huge_app esp32_c3
 
 For the ESP32-C3 Super Mini variant, use the matching ESP32-C3 FQBN available in your local board package.
 
+These builds include Wi-Fi, BLE scanning, mDNS, system diagnostics, and GPIO control, so the Huge APP partition is the supported default. A future GPIO-only lite sketch could remove discovery features for smaller app partitions, but the current official sketches prioritize one consistent Shortcut-friendly API.
+
 After flashing, validate:
 
 - boot logs in Serial Monitor
@@ -528,6 +532,7 @@ Important precautions:
 - confirm the IP address in Serial Monitor
 - make sure your iPhone is on the same local network
 - test `http://<board-ip>/health` in a browser first
+- if Wi-Fi was down at boot, leave Serial Monitor open and wait for the reconnect log before testing
 
 ### The Shortcut Fails
 

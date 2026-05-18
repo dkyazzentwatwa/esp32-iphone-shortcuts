@@ -2,8 +2,8 @@
   ESP32-C3 Super Mini GPIO HTTP API for Apple Shortcuts
 
   Wi-Fi credentials:
-  - Paste your home Wi-Fi name into `ssid`
-  - Paste your Wi-Fi password into `password`
+  - Copy `secrets.example.h` to `secrets.h` at the repo root
+  - Fill in your Wi-Fi name and password there
 
   Uploading the sketch:
   - In Arduino IDE, install the ESP32 board package if needed
@@ -30,6 +30,7 @@ const uint16_t kHttpPort = 80;
 const int kDefaultOutputPin = 4;
 const unsigned long kWifiRetryDelayMs = 500;
 const unsigned long kWifiConnectTimeoutMs = 30000;
+const unsigned long kWifiReconnectIntervalMs = 10000;
 const uint32_t kBleScanDurationMs = 3000;
 
 // Conservative "safe" pins for common ESP32-C3 Super Mini boards.
@@ -39,6 +40,9 @@ const size_t kSafeOutputPinCount = sizeof(kSafeOutputPins) / sizeof(kSafeOutputP
 
 WebServer server(kHttpPort);
 bool bleInitialized = false;
+bool mdnsStarted = false;
+bool wasWifiConnected = false;
+unsigned long lastWifiReconnectAttemptMs = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -46,16 +50,18 @@ void setup() {
 
   Serial.println();
   Serial.println("ESP32-C3 Super Mini GPIO HTTP API starting...");
-  Serial.println("Update the ssid and password constants before uploading.");
+  Serial.println("Copy secrets.example.h to secrets.h and update your Wi-Fi credentials before uploading.");
 
   initializeSafePins(kSafeOutputPins, kSafeOutputPinCount);
   Serial.println("Configured all safe GPIO pins as OUTPUT and set them LOW.");
 
   bool wifiConnected = connectToWifi(kHostname, ssid, password, kWifiRetryDelayMs, true, kWifiConnectTimeoutMs);
-  if (!wifiConnected) {
-    return;
+  if (wifiConnected) {
+    mdnsStarted = startMdns(kHostname);
+  } else {
+    Serial.println("Continuing without Wi-Fi. Reconnect attempts will run in loop().");
   }
-  startMdns(kHostname);
+  wasWifiConnected = wifiConnected;
 
   registerShortcutRoutes(
       server,
@@ -74,11 +80,26 @@ void setup() {
   Serial.print("Default example pin: ");
   Serial.println(kDefaultOutputPin);
 
-  printUsageExamples(kHostname, kSafeOutputPins, kSafeOutputPinCount, kDefaultOutputPin, true);
+  if (wifiConnected) {
+    printUsageExamples(kHostname, kSafeOutputPins, kSafeOutputPinCount, kDefaultOutputPin, true);
+  } else {
+    Serial.println("HTTP routes are registered and will be reachable after Wi-Fi reconnects.");
+  }
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
+  bool wasConnectedBefore = wasWifiConnected;
+  if (maintainWifiConnection(
+          kHostname,
+          ssid,
+          password,
+          kWifiReconnectIntervalMs,
+          lastWifiReconnectAttemptMs,
+          wasWifiConnected,
+          mdnsStarted)) {
+    if (!wasConnectedBefore && wasWifiConnected) {
+      printUsageExamples(kHostname, kSafeOutputPins, kSafeOutputPinCount, kDefaultOutputPin, true);
+    }
     server.handleClient();
   }
 }

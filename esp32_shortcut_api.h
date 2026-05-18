@@ -472,7 +472,7 @@ static bool connectToWifi(
       Serial.print(" (");
       Serial.print(static_cast<int>(finalStatus));
       Serial.println(")");
-      Serial.println("HTTP server will not start until Wi-Fi connects.");
+      Serial.println("HTTP server will start after Wi-Fi reconnects.");
       return false;
     }
 
@@ -492,17 +492,64 @@ static bool connectToWifi(
   }
 }
 
-static void startMdns(const char* hostname) {
+static bool startMdns(const char* hostname) {
   Serial.print("Starting mDNS at http://");
   Serial.print(hostname);
   Serial.println(".local");
 
   if (MDNS.begin(hostname)) {
     Serial.println("mDNS started successfully.");
-    return;
+    return true;
   }
 
   Serial.println("mDNS failed to start. Continuing with IP address only.");
+  return false;
+}
+
+static bool maintainWifiConnection(
+    const char* hostname,
+    const char* ssid,
+    const char* password,
+    unsigned long reconnectIntervalMs,
+    unsigned long& lastReconnectAttemptMs,
+    bool& wasWifiConnected,
+    bool& mdnsStarted) {
+  bool wifiConnected = WiFi.status() == WL_CONNECTED;
+
+  if (wifiConnected) {
+    if (!wasWifiConnected) {
+      Serial.println("Wi-Fi reconnected.");
+      Serial.print("Local IP: ");
+      Serial.println(localIpString());
+
+      if (!mdnsStarted) {
+        mdnsStarted = startMdns(hostname);
+      }
+    }
+
+    wasWifiConnected = true;
+    return true;
+  }
+
+  if (wasWifiConnected) {
+    Serial.println("Wi-Fi disconnected. HTTP API is paused until Wi-Fi returns.");
+    wasWifiConnected = false;
+    mdnsStarted = false;
+    MDNS.end();
+  }
+
+  unsigned long now = millis();
+  if (lastReconnectAttemptMs == 0 || now - lastReconnectAttemptMs >= reconnectIntervalMs) {
+    lastReconnectAttemptMs = now;
+    Serial.print("Attempting Wi-Fi reconnect to SSID: ");
+    Serial.println(ssid);
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(hostname);
+    WiFi.disconnect(false, false);
+    WiFi.begin(ssid, password);
+  }
+
+  return false;
 }
 
 static void printUsageExamples(

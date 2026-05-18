@@ -27,6 +27,7 @@ const char* kHostname = "esp32-gpio";
 const uint16_t kHttpPort = 80;
 const unsigned long kWifiRetryDelayMs = 500;
 const unsigned long kWifiConnectTimeoutMs = 30000;
+const unsigned long kWifiReconnectIntervalMs = 10000;
 const uint32_t kBleScanDurationMs = 3000;
 
 enum ChipModel {
@@ -60,6 +61,9 @@ const size_t kFallbackSafePinCount = sizeof(kFallbackSafePins) / sizeof(kFallbac
 DeviceConfig gConfig;
 WebServer server(kHttpPort);
 bool bleInitialized = false;
+bool mdnsStarted = false;
+bool wasWifiConnected = false;
+unsigned long lastWifiReconnectAttemptMs = 0;
 
 const char* chipModelName(ChipModel model) {
   switch (model) {
@@ -246,18 +250,19 @@ void setup() {
 
   Serial.println();
   Serial.println("ESP32 GPIO HTTP API - Universal starting...");
-  Serial.println("Update the ssid and password constants before uploading.");
+  Serial.println("Copy secrets.example.h to secrets.h and update your Wi-Fi credentials before uploading.");
 
   loadConfig();
   initializeSafePins(gConfig.allowedPins, gConfig.pinCount);
   Serial.println("Configured safe GPIO pins as OUTPUT and set them LOW.");
 
   bool wifiConnected = connectToWifi(kHostname, ssid, password, kWifiRetryDelayMs, true, kWifiConnectTimeoutMs);
-  if (!wifiConnected) {
-    return;
+  if (wifiConnected) {
+    mdnsStarted = startMdns(kHostname);
+  } else {
+    Serial.println("Continuing without Wi-Fi. Reconnect attempts will run in loop().");
   }
-
-  startMdns(kHostname);
+  wasWifiConnected = wifiConnected;
 
   server.on("/", HTTP_GET, []() {
     handleRoot();
@@ -294,9 +299,26 @@ void setup() {
   Serial.print("Default example pin: ");
   Serial.println(gConfig.pinCount > 0 ? gConfig.allowedPins[0] : 23);
 
-  printUsageExamples();
+  if (wifiConnected) {
+    printUsageExamples();
+  } else {
+    Serial.println("HTTP routes are registered and will be reachable after Wi-Fi reconnects.");
+  }
 }
 
 void loop() {
-  server.handleClient();
+  bool wasConnectedBefore = wasWifiConnected;
+  if (maintainWifiConnection(
+          kHostname,
+          ssid,
+          password,
+          kWifiReconnectIntervalMs,
+          lastWifiReconnectAttemptMs,
+          wasWifiConnected,
+          mdnsStarted)) {
+    if (!wasConnectedBefore && wasWifiConnected) {
+      printUsageExamples();
+    }
+    server.handleClient();
+  }
 }

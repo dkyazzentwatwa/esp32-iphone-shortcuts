@@ -33,7 +33,7 @@ const unsigned long kWifiConnectTimeoutMs = 30000;
 const unsigned long kWifiReconnectIntervalMs = 10000;
 const uint32_t kBleScanDurationMs = 3000;
 
-const int kSafeOutputPins[] = {18, 19, 21, 22, 23, 25, 26, 27, 32, 33};
+const int kSafeOutputPins[] = {12, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33};
 const size_t kSafeOutputPinCount = sizeof(kSafeOutputPins) / sizeof(kSafeOutputPins[0]);
 
 WebServer server(kHttpPort);
